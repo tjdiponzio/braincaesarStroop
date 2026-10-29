@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Stroop Research Tool</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #000000;
+            color: #ffffff;
+            font-family: Arial, sans-serif;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+        .screen {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            width: 100%;
+            max-width: 600px;
+            padding: 20px;
+            height: 100%;
+        }
+        .active {
+            display: flex;
+        }
+        
+        h1 {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            color: #ffffff;
+            letter-spacing: 1px;
+        }
+
+        /* --- EXPERIMENT SCREEN STYLING --- */
+        #experiment-screen {
+            justify-content: center;
+            gap: 40px;
+        }
+        #stimulus-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 120px;
+            width: 100%;
+        }
+        #stimulus {
+            font-size: 50px;
+            font-weight: bold;
+        }
+        .color-grid {
+            width: 100%;
+            max-width: 85%;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            touch-action: manipulation;
+        }
+        .color-btn {
+            padding: 22px 10px;
+            font-size: 18px;
+            font-weight: bold;
+            border: none;
+            border-radius: 12px;
+            color: white;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            touch-action: manipulation;
+        }
+        #btn-red { background-color: #d32f2f; color: black; }
+        #btn-blue { background-color: #1976d2; color: black; }
+        #btn-green { background-color: #388e3c; color: black; }
+        #btn-yellow { background-color: #fbc02d; color: black; }
+
+        /* --- RESULTS SCREEN STYLING --- */
+        .results-container {
+            font-family: monospace;
+            font-size: 12px;
+            text-align: left;
+            width: 100%;
+            max-width: 100%;
+            margin-bottom: 25px;
+            line-height: 1.6;
+            overflow-x: auto;
+            padding: 15px;
+            background: #1a1a1a;
+            border-radius: 8px;
+            border: 1px solid #333;
+        }
+        .table-header {
+            font-weight: bold;
+            color: #3498db;
+        }
+        .table-row {
+            white-space: pre;
+            color: #ffffff;
+        }
+
+        /* Standard Buttons */
+        .action-btn {
+            background-color: #0072B2;
+            color: white;
+            border: none;
+            padding: 16px 30px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 8px;
+            width: 85%;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+            touch-action: manipulation;
+        }
+        .action-btn:active, .color-btn:active {
+            transform: scale(0.96);
+        }
+        .danger-btn { background-color: #c0392b; }
+    </style>
+</head>
+<body>
+
+    <div id="start-screen" class="screen active">
+        <h1 id="instruction-header">DRUG STROOP TASK</h1>
+        <div style="font-size: 16px; line-height: 1.6; margin-bottom: 35px; padding: 0 10px;">
+            Identify the <b>INK COLOR</b> of the word.<br><br>
+            Ignore what the text actually reads. Tap the matching color button as quickly as possible.
+        </div>
+        <button class="action-btn" id="start-btn">START TASK</button>
+    </div>
+
+    <div id="experiment-screen" class="screen">
+        <div id="stimulus-container">
+            <div id="stimulus">+</div>
+        </div>
+        
+        <div class="color-grid">
+            <button class="color-btn" id="btn-red">RED</button>
+            <button class="color-btn" id="btn-blue">BLUE</button>
+            <button class="color-btn" id="btn-green">GREEN</button>
+            <button class="color-btn" id="btn-yellow">YELLOW</button>
+        </div>
+    </div>
+
+    <div id="results-screen" class="screen">
+        <h1>RESULTS SUMMARY</h1>
+        <div class="results-container">
+            <div class="table-row table-header" id="header-row"></div>
+            <div class="table-row">-------------------------------------------</div>
+            <div id="results-body"></div>
+        </div>
+        <button class="action-btn danger-btn" id="exit-btn">RESET TASK</button>
+    </div>
+
+    <script>
+        // --- POOLS CONFIGURATION ---
+        const CONDITIONS_POOLS = {
+            "Congruent": [],
+            "Incongruent": [],
+        };
+
+        const TIME_LIMIT = 1500;
+        const TRIALS_PER_COND = 25;
+
+        const COLORS = [
+            { name: "RED", hex: "#d32f2f", id: "red" },
+            { name: "BLUE", hex: "#1976d2", id: "blue" },
+            { name: "GREEN", hex: "#388e3c", id: "green" },
+            { name: "YELLOW", hex: "#fbc02d", id: "yellow" }
+        ];
+
+        // --- RUNTIME STATE ---
+        let trialSequence = [];
+        let trialCount = 0;
+        let results = [];
+        let startTime = 0;
+        let targetColorId = "";
+        let isAcceptingInput = false;
+        let timeoutId = null;
+
+        // --- DOM ELEMENTS ---
+        const screens = {
+            start: document.getElementById('start-screen'),
+            exp: document.getElementById('experiment-screen'),
+            res: document.getElementById('results-screen')
+        };
+
+        const stimulus = document.getElementById('stimulus');
+        const resultsBody = document.getElementById('results-body');
+        const headerRow = document.getElementById('header-row');
+
+        // --- AUTOMATIC SEQUENCE INITIALIZATION ---
+        function initializeTrialSequence() {
+            trialSequence = [];
+            const activeList = Object.keys(CONDITIONS_POOLS);
+            
+            activeList.forEach(cond => {
+                for (let i = 0; i < TRIALS_PER_COND; i++) {
+                    trialSequence.push(cond);
+                }
+            });
+
+            // Random shuffle elements
+            trialSequence.sort(() => Math.random() - 0.5);
+            
+            document.getElementById('instruction-header').innerHTML = 
+                `DRUG STROOP TASK<br><span style="font-size: 14px; color: #aaa; font-weight: normal;">Total Trials: ${trialSequence.length}</span>`;
+        }
+
+        // Run setup immediately on script evaluation
+        initializeTrialSequence();
+
+        // --- NAVIGATION HANDLERS ---
+        function changeScreen(targetScreen) {
+            Object.values(screens).forEach(s => s.classList.remove('active'));
+            screens[targetScreen].classList.add('active');
+        }
+
+        document.getElementById('start-btn').addEventListener('click', () => {
+            results = [];
+            trialCount = 0;
+            changeScreen('exp');
+            prepareNextTrial();
+        });
+
+        // --- EXECUTION CORE LOGIC ---
+        function prepareNextTrial() {
+            if (trialCount >= trialSequence.length) {
+                endTask();
+                return;
+            }
+
+            isAcceptingInput = false;
+            stimulus.textContent = "+";
+            stimulus.style.color = "#ffffff";
+            
+            setTimeout(showStimulus, 600);
+        }
+
+        function showStimulus() {
+            const currentCond = trialSequence[trialCount];
+            const target = COLORS[Math.floor(Math.random() * COLORS.length)];
+            targetColorId = target.id;
+
+            let word = "";
+
+            if (currentCond === "Congruent") {
+                word = target.name;
+            } else if (currentCond === "Incongruent") {
+                const choices = COLORS.filter(c => c.id !== target.id);
+                word = choices[Math.floor(Math.random() * choices.length)].name;
+            } else {
+                const pool = CONDITIONS_POOLS[currentCond];
+                word = pool[Math.floor(Math.random() * pool.length)];
+            }
+
+            stimulus.textContent = word;
+            stimulus.style.color = target.hex;
+            
+            isAcceptingInput = true;
+            startTime = performance.now();
+
+            timeoutId = setTimeout(handleTimeout, TIME_LIMIT);
+        }
+
+        function processSelection(chosenId) {
+            if (!isAcceptingInput) return;
+            
+            clearTimeout(timeoutId);
+            isAcceptingInput = false;
+
+            const rt = (performance.now() - startTime) / 1000;
+            const isCorrect = (chosenId === targetColorId);
+
+            recordAndFeedback(isCorrect, rt, false);
+        }
+
+        function handleTimeout() {
+            if (!isAcceptingInput) return;
+            isAcceptingInput = false;
+
+            recordAndFeedback(false, TIME_LIMIT / 1000, true);
+        }
+
+        function recordAndFeedback(isCorrect, rt, timedOut) {
+            results.push({
+                condition: trialSequence[trialCount],
+                correct: isCorrect,
+                rt: rt
+            });
+            trialCount++;
+
+            if (timedOut) {
+                stimulus.textContent = "TOO SLOW";
+                stimulus.style.color = "#7f8c8d";
+            } else if (isCorrect) {
+                stimulus.textContent = "CORRECT";
+                stimulus.style.color = "#00ffb9";
+            } else {
+                stimulus.textContent = "INCORRECT";
+                stimulus.style.color = "#ff8200";
+            }
+
+            setTimeout(prepareNextTrial, 500);
+        }
+
+        // --- TOUCH INPUT EVENT BINDINGS ---
+        COLORS.forEach(color => {
+            document.getElementById(`btn-${color.id}`).addEventListener('click', () => {
+                processSelection(color.id);
+            });
+        });
+
+        // --- REPORT GENERATION SCREEN ---
+        function endTask() {
+            clearTimeout(timeoutId);
+            changeScreen('res');
+            showResultsPage();
+        }
+
+        function padString(str, length) {
+            str = String(str);
+            return str.length >= length ? str : str + ' '.repeat(length - str.length);
+        }
+
+        function showResultsPage() {
+            headerRow.textContent = `${padString('Condition', 15)} | ${padString('Acc %', 8)} | Avg RT`;
+            resultsBody.innerHTML = '';
+
+            const testedConditions = Array.from(new Set(results.map(r => r.condition))).sort();
+
+            testedConditions.forEach(cond => {
+                const condData = results.filter(r => r.condition === cond);
+                const correctTrials = condData.filter(r => r.correct);
+                
+                const acc = (condData.length > 0) ? (correctTrials.length / condData.length) * 100 : 0;
+                
+                let avgRt = 0;
+                if (correctTrials.length > 0) {
+                    const sumRt = correctTrials.reduce((sum, r) => sum + r.rt, 0);
+                    avgRt = sumRt / correctTrials.length;
+                }
+
+                const rowDiv = document.createElement('div');
+                rowDiv.className = 'table-row';
+                
+                const colCond = padString(cond, 15);
+                const colAcc = padString(acc.toFixed(1) + '%', 8);
+                const colRt = avgRt.toFixed(3) + 's';
+
+                rowDiv.textContent = `${colCond} | ${colAcc} | ${colRt}`;
+                resultsBody.appendChild(rowDiv);
+            });
+        }
+
+        // --- APP RESET CONTROLS ---
+        document.getElementById('exit-btn').addEventListener('click', () => window.location.reload());
+    </script>
+</body>
+</html>
