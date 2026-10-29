@@ -132,7 +132,7 @@
 <body>
 
     <div id="start-screen" class="screen active">
-        <h1 id="instruction-header">DRUG STROOP TASK</h1>
+        <h1 id="instruction-header">STROOP TASK</h1>
         <div style="font-size: 16px; line-height: 1.6; margin-bottom: 35px; padding: 0 10px;">
             Identify the <b>INK COLOR</b> of the word.<br><br>
             Ignore what the text actually reads. Tap the matching color button as quickly as possible.
@@ -215,7 +215,7 @@
             trialSequence.sort(() => Math.random() - 0.5);
             
             document.getElementById('instruction-header').innerHTML = 
-                `DRUG STROOP TASK<br><span style="font-size: 14px; color: #aaa; font-weight: normal;">Total Trials: ${trialSequence.length}</span>`;
+                `STROOP TASK<br><span style="font-size: 14px; color: #aaa; font-weight: normal;">Total Trials: ${trialSequence.length}</span>`;
         }
 
         // Run setup immediately on script evaluation
